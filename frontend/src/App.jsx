@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
-const API_URL = "http://localhost:8080/api/videos";
+const API_URL = "https://streamvault-lmsr.onrender.com/api/videos";
 
 function App() {
   const [videos, setVideos] = useState([]);
@@ -94,7 +94,7 @@ const deleteVideo = async (video) => {
 
   try {
     const response = await fetch(
-      `http://localhost:8080/api/videos/${encodeURIComponent(video.id)}`,
+      `https://streamvault-lmsr.onrender.com/api/videos/${encodeURIComponent(video.id)}`,
       { method: "DELETE" }
     );
 

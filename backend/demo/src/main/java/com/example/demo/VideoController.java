@@ -16,7 +16,8 @@ import org.springframework.web.bind.annotation.RequestMethod;
 @RestController
 @CrossOrigin(origins = {
     "http://localhost:5173",
-    "http://localhost:5174"
+    "http://localhost:5174",
+    "https://stream-vault-dun.vercel.app"
 })
 @RequestMapping("/api/videos")
 public class VideoController {

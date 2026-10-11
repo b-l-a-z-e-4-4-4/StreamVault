@@ -130,4 +130,11 @@ public class OtpController {
         SecurityContextHolder.clearContext();
         return ResponseEntity.ok(Map.of("message", "Logged out."));
     }
+    @GetMapping("/status")
+public ResponseEntity<Map<String, Object>> status(HttpSession session) {
+    boolean isAdmin = Boolean.TRUE.equals(
+            session.getAttribute("STREAMVAULT_ADMIN"));
+
+    return ResponseEntity.ok(Map.of("isAdmin", isAdmin));
+}
 }

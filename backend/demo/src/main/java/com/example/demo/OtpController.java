@@ -35,12 +35,11 @@ public class OtpController {
         this.emailOtpService = emailOtpService;
         this.adminEmail = adminEmail.trim();
     }
-
-    @GetMapping("/csrf")
-    public ResponseEntity<Void> csrf(CsrfToken csrfToken) {
-        csrfToken.getToken();
-        return ResponseEntity.noContent().build();
-    }
+@GetMapping("/csrf")
+public ResponseEntity<Map<String, String>> csrf(CsrfToken csrfToken) {
+    return ResponseEntity.ok(
+            Map.of("token", csrfToken.getToken()));
+}
 
     @PostMapping("/request-email-otp")
     public ResponseEntity<Map<String, String>> requestEmailOtp(

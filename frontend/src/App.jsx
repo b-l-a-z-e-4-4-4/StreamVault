@@ -54,13 +54,15 @@ function App() {
     setFormMessage("");
 
     try {
-      const response = await fetch(`${API_URL}/demo`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formData),
-      });
+const response = await fetch(`${API_URL}/demo`, {
+  method: "POST",
+  credentials: "include",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify(formData),
+});
+
 
       if (!response.ok) {
         throw new Error(`Server returned HTTP ${response.status}`);
@@ -95,7 +97,10 @@ const deleteVideo = async (video) => {
   try {
     const response = await fetch(
       `https://streamvault-lmsr.onrender.com/api/videos/${encodeURIComponent(video.id)}`,
-      { method: "DELETE" }
+      {
+  method: "DELETE",
+  credentials: "include"
+}
     );
 
     if (!response.ok) {

@@ -25,3 +25,14 @@ frontend/dist/
 .env
 .env.*
 !.env.example
+
+# Local secrets, cookies, and debug output
+.env
+.env.*
+!.env.example
+cookies.txt
+backend/demo/cookies.txt
+backend/demo/security-debug.log
+backend/demo/startup-error.log
+backend/demo/src/main/resources/application-local.properties
+frontend/src/App.jsx.backup

@@ -743,3 +743,139 @@
 .add-video-form p {
   margin: 0;
 }
+
+/* StreamVault — cinematic streaming layout */
+:root {
+  --accent: #8b5cf6;
+  --border: rgba(255, 255, 255, 0.1);
+  --surface: #171824;
+  --text: #f7f7fb;
+  --muted: #a7a8ba;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: #080910;
+}
+
+body {
+  margin: 0;
+  background: #080910;
+  color: var(--text);
+}
+
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(8, 9, 16, 0.94);
+  backdrop-filter: blur(18px);
+}
+
+.hero {
+  min-height: 430px;
+  background:
+    radial-gradient(ellipse at 80% 30%, rgba(110, 65, 220, 0.3), transparent 45%),
+    linear-gradient(110deg, #11101f, #080910 75%);
+}
+
+.primary-button {
+  border-radius: 7px;
+  background: #f7f7fb;
+  color: #101018;
+}
+
+.primary-button:hover {
+  background: #ded5ff;
+}
+
+.library-section {
+  padding-top: 45px;
+}
+
+.section-heading h2 {
+  font-size: clamp(24px, 3vw, 32px);
+  letter-spacing: -0.7px;
+}
+
+.toolbar {
+  align-items: flex-start;
+}
+
+.video-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(190px, 225px);
+  grid-template-columns: none;
+  gap: 18px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 12px 3px 24px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  scrollbar-color: #51446e transparent;
+}
+
+.video-card {
+  scroll-snap-align: start;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  overflow: hidden;
+}
+
+.video-card:hover {
+  transform: translateY(-5px) scale(1.02);
+}
+
+.video-art {
+  min-height: 290px;
+  aspect-ratio: 2 / 3;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(139, 92, 246, 0.5), transparent 50%),
+    linear-gradient(145deg, #28203f, #10111b 75%);
+}
+
+.video-art-decoration {
+  width: 140px;
+  height: 140px;
+}
+
+.video-art-letter {
+  font-size: 90px;
+}
+
+.video-details {
+  padding: 13px 3px;
+}
+
+.video-details h3 {
+  margin: 8px 0;
+  font-size: 16px;
+}
+
+.video-details p {
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.add-video-form {
+  background: #11121c;
+}
+
+@media (max-width: 650px) {
+  .hero {
+    min-height: auto;
+  }
+
+  .video-grid {
+    grid-auto-columns: 155px;
+    gap: 12px;
+  }
+
+  .video-art {
+    min-height: 230px;
+  }
+}

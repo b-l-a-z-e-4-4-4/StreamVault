@@ -1,6 +1,9 @@
+
 package com.example.demo;
 
 import java.util.List;
+
+import jakarta.servlet.http.HttpSession;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -11,7 +14,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.RequestMethod;
 
 @RestController
 @CrossOrigin(origins = {
@@ -23,9 +25,13 @@ import org.springframework.web.bind.annotation.RequestMethod;
 public class VideoController {
 
     private final VideoRepository videoRepository;
+    private final AdminSessionService adminSessionService;
 
-    public VideoController(VideoRepository videoRepository) {
+    public VideoController(
+            VideoRepository videoRepository,
+            AdminSessionService adminSessionService) {
         this.videoRepository = videoRepository;
+        this.adminSessionService = adminSessionService;
     }
 
     @GetMapping
@@ -34,12 +40,29 @@ public class VideoController {
     }
 
     @PostMapping("/demo")
-    public Video addDemoVideo(@RequestBody Video video) {
-        return videoRepository.save(video);
+    public ResponseEntity<?> addDemoVideo(
+            @RequestBody Video video,
+            HttpSession session) {
+
+        if (!adminSessionService.isAdmin(session)) {
+            return ResponseEntity.status(401)
+                    .body("Admin login required.");
+        }
+
+        Video savedVideo = videoRepository.save(video);
+        return ResponseEntity.ok(savedVideo);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteVideo(@PathVariable String id) {
+    public ResponseEntity<?> deleteVideo(
+            @PathVariable String id,
+            HttpSession session) {
+
+        if (!adminSessionService.isAdmin(session)) {
+            return ResponseEntity.status(401)
+                    .body("Admin login required.");
+        }
+
         if (!videoRepository.existsById(id)) {
             return ResponseEntity.notFound().build();
         }

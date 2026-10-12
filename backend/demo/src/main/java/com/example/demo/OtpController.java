@@ -31,67 +31,67 @@ public class OtpController {
             OtpService otpService,
             EmailOtpService emailOtpService,
             @Value("${app.admin.email}") String adminEmail) {
+
         this.otpService = otpService;
         this.emailOtpService = emailOtpService;
         this.adminEmail = adminEmail.trim();
     }
-@GetMapping("/csrf")
-public ResponseEntity<Map<String, String>> csrf(CsrfToken csrfToken) {
-    return ResponseEntity.ok(
-            Map.of("token", csrfToken.getToken()));
-}
 
- 
+    @GetMapping("/csrf")
+    public ResponseEntity<Map<String, String>> csrf(
+            CsrfToken csrfToken) {
+
+        return ResponseEntity.ok(
+                Map.of("token", csrfToken.getToken()));
+    }
+
     @PostMapping("/request-email-otp")
     public ResponseEntity<Map<String, String>> requestEmailOtp(
             @RequestBody Map<String, String> request) {
 
         String email = request.get("email");
 
-        if (email == null || !EMAIL_PATTERN.matcher(email.trim()).matches()) {
+        if (email == null
+                || !EMAIL_PATTERN.matcher(email.trim()).matches()) {
             return ResponseEntity.badRequest().body(
                     Map.of("message", "Enter a valid email address."));
         }
 
-        if (!email.trim().equalsIgnoreCase(adminEmail)) {
+        email = email.trim();
+
+        if (!email.equalsIgnoreCase(adminEmail)) {
             return ResponseEntity.status(403).body(
                     Map.of("message", "This account is not authorized."));
         }
 
-        String otp = otpService.generateOtp(email.trim());
+        String otp = otpService.generateOtp(email);
+
         System.err.println("OTP DEBUG: request-email-otp reached");
 
-try {
-    emailOtpService.sendOtp(email.trim(), otp);
-} catch (Exception exception) {
-    otpService.invalidateOtp(email.trim());
-
-    System.err.println("OTP EMAIL ERROR: " + exception.getMessage());
-    exception.printStackTrace();
-
-    return ResponseEntity.internalServerError().body(
-        Map.of("message",
-            "Unable to send OTP. Check email configuration."));
-}
-
         try {
-            emailOtpService.sendOtp(email.trim(), otp);
-        } catch (Exception exception) {
-            otpService.invalidateOtp(email.trim());
+            // Send the OTP once using EmailOtpService.
+            emailOtpService.sendOtp(email, otp);
 
-            System.err.println("OTP EMAIL ERROR: " + exception.getMessage());
+        } catch (Exception exception) {
+            otpService.invalidateOtp(email);
+
+            System.err.println(
+                    "OTP EMAIL ERROR: " + exception.getMessage());
             exception.printStackTrace();
 
             return ResponseEntity.internalServerError().body(
-                    Map.of("message",
-                            "Unable to send OTP. Check email configuration."));
+                    Map.of(
+                            "message",
+                            "Unable to send OTP. Check email configuration."
+                    ));
         }
 
         return ResponseEntity.ok(
-                Map.of("message",
-                        "If eligible, a verification code has been sent."));
+                Map.of(
+                        "message",
+                        "If eligible, a verification code has been sent."
+                ));
     }
-
 
     @PostMapping("/verify-email-otp")
     public ResponseEntity<Map<String, String>> verifyEmailOtp(
@@ -99,35 +99,47 @@ try {
             HttpSession session) {
 
         String email = request.get("email");
-        System.err.println("OTP DEBUG: request-email-otp reached");
         String code = request.get("otp");
 
+        System.err.println("OTP DEBUG: verify-email-otp reached");
+
         if (email == null || code == null
-                || !EMAIL_PATTERN.matcher(email).matches()
+                || !EMAIL_PATTERN.matcher(email.trim()).matches()
                 || !code.matches("\\d{6}")) {
+
             return ResponseEntity.badRequest().body(
-                    Map.of("message",
-                            "Enter a valid email and six-digit code."));
+                    Map.of(
+                            "message",
+                            "Enter a valid email and six-digit code."
+                    ));
         }
 
-        if (!email.trim().equalsIgnoreCase(adminEmail)) {
+        email = email.trim();
+
+        if (!email.equalsIgnoreCase(adminEmail)) {
             return ResponseEntity.status(403).body(
                     Map.of("message", "This account is not authorized."));
         }
 
-        if (!otpService.verifyOtp(email.trim(), code)) {
+        if (!otpService.verifyOtp(email, code)) {
             return ResponseEntity.status(401).body(
-                    Map.of("message",
-                            "Invalid or expired verification code."));
+                    Map.of(
+                            "message",
+                            "Invalid or expired verification code."
+                    ));
         }
 
-        var authentication = new UsernamePasswordAuthenticationToken(
-                adminEmail,
-                null,
-                List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+        var authentication =
+                new UsernamePasswordAuthenticationToken(
+                        adminEmail,
+                        null,
+                        List.of(
+                                new SimpleGrantedAuthority("ROLE_ADMIN")
+                        ));
 
         SecurityContext context =
                 SecurityContextHolder.createEmptyContext();
+
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
 
@@ -137,7 +149,8 @@ try {
                 context);
 
         session.setAttribute("STREAMVAULT_ADMIN", true);
-        session.setAttribute("STREAMVAULT_ADMIN_EMAIL", adminEmail);
+        session.setAttribute(
+                "STREAMVAULT_ADMIN_EMAIL", adminEmail);
 
         return ResponseEntity.ok(
                 Map.of("message", "Admin verification successful."));
@@ -146,15 +159,22 @@ try {
     @PostMapping("/logout")
     public ResponseEntity<Map<String, String>> logout(
             HttpSession session) {
+
         session.invalidate();
         SecurityContextHolder.clearContext();
-        return ResponseEntity.ok(Map.of("message", "Logged out."));
-    }
-    @GetMapping("/status")
-public ResponseEntity<Map<String, Object>> status(HttpSession session) {
-    boolean isAdmin = Boolean.TRUE.equals(
-            session.getAttribute("STREAMVAULT_ADMIN"));
 
-    return ResponseEntity.ok(Map.of("isAdmin", isAdmin));
-}
+        return ResponseEntity.ok(
+                Map.of("message", "Logged out."));
+    }
+
+    @GetMapping("/status")
+    public ResponseEntity<Map<String, Object>> status(
+            HttpSession session) {
+
+        boolean isAdmin = Boolean.TRUE.equals(
+                session.getAttribute("STREAMVAULT_ADMIN"));
+
+        return ResponseEntity.ok(
+                Map.of("isAdmin", isAdmin));
+    }
 }

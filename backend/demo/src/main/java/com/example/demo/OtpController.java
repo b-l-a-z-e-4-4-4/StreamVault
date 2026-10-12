@@ -59,14 +59,17 @@ public ResponseEntity<Map<String, String>> csrf(CsrfToken csrfToken) {
 
         String otp = otpService.generateOtp(email.trim());
 
-        try {
-            emailOtpService.sendOtp(email.trim(), otp);
-        } catch (Exception exception) {
-            otpService.invalidateOtp(email.trim());
-            return ResponseEntity.internalServerError().body(
-                    Map.of("message",
-                            "Unable to send OTP. Check email configuration."));
-        }
+        
+} catch (Exception exception) {
+    otpService.invalidateOtp(email.trim());
+
+    System.err.println("OTP EMAIL ERROR: " + exception.getMessage());
+    exception.printStackTrace();
+
+    return ResponseEntity.internalServerError().body(
+        Map.of("message",
+            "Unable to send OTP. Check email configuration."));
+}
 
         return ResponseEntity.ok(
                 Map.of("message",

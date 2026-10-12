@@ -41,13 +41,14 @@ public ResponseEntity<Map<String, String>> csrf(CsrfToken csrfToken) {
             Map.of("token", csrfToken.getToken()));
 }
 
+ 
     @PostMapping("/request-email-otp")
     public ResponseEntity<Map<String, String>> requestEmailOtp(
             @RequestBody Map<String, String> request) {
 
         String email = request.get("email");
 
-        if (email == null || !EMAIL_PATTERN.matcher(email).matches()) {
+        if (email == null || !EMAIL_PATTERN.matcher(email.trim()).matches()) {
             return ResponseEntity.badRequest().body(
                     Map.of("message", "Enter a valid email address."));
         }
@@ -59,22 +60,24 @@ public ResponseEntity<Map<String, String>> csrf(CsrfToken csrfToken) {
 
         String otp = otpService.generateOtp(email.trim());
 
-        
-} catch (Exception exception) {
-    otpService.invalidateOtp(email.trim());
+        try {
+            emailOtpService.sendOtp(email.trim(), otp);
+        } catch (Exception exception) {
+            otpService.invalidateOtp(email.trim());
 
-    System.err.println("OTP EMAIL ERROR: " + exception.getMessage());
-    exception.printStackTrace();
+            System.err.println("OTP EMAIL ERROR: " + exception.getMessage());
+            exception.printStackTrace();
 
-    return ResponseEntity.internalServerError().body(
-        Map.of("message",
-            "Unable to send OTP. Check email configuration."));
-}
+            return ResponseEntity.internalServerError().body(
+                    Map.of("message",
+                            "Unable to send OTP. Check email configuration."));
+        }
 
         return ResponseEntity.ok(
                 Map.of("message",
                         "If eligible, a verification code has been sent."));
     }
+
 
     @PostMapping("/verify-email-otp")
     public ResponseEntity<Map<String, String>> verifyEmailOtp(

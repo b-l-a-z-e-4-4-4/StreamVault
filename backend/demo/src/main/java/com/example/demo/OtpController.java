@@ -59,6 +59,20 @@ public ResponseEntity<Map<String, String>> csrf(CsrfToken csrfToken) {
         }
 
         String otp = otpService.generateOtp(email.trim());
+        System.err.println("OTP DEBUG: request-email-otp reached");
+
+try {
+    emailOtpService.sendOtp(email.trim(), otp);
+} catch (Exception exception) {
+    otpService.invalidateOtp(email.trim());
+
+    System.err.println("OTP EMAIL ERROR: " + exception.getMessage());
+    exception.printStackTrace();
+
+    return ResponseEntity.internalServerError().body(
+        Map.of("message",
+            "Unable to send OTP. Check email configuration."));
+}
 
         try {
             emailOtpService.sendOtp(email.trim(), otp);
@@ -85,6 +99,7 @@ public ResponseEntity<Map<String, String>> csrf(CsrfToken csrfToken) {
             HttpSession session) {
 
         String email = request.get("email");
+        System.err.println("OTP DEBUG: request-email-otp reached");
         String code = request.get("otp");
 
         if (email == null || code == null

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
 const API_URL = "https://streamvault-lmsr.onrender.com/api/videos";
+const AUTH_URL = "https://streamvault-lmsr.onrender.com/api/auth";
 
 function App() {
   const [videos, setVideos] = useState([]);
@@ -20,6 +21,12 @@ function App() {
 
   const [saving, setSaving] = useState(false);
   const [formMessage, setFormMessage] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminEmail, setAdminEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpRequested, setOtpRequested] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authMessage, setAuthMessage] = useState("");
 
   async function fetchVideos() {
     try {
@@ -47,6 +54,158 @@ function App() {
   useEffect(() => {
     fetchVideos();
   }, []);
+  
+async function handleRequestOtp(event) {
+  
+  event.preventDefault();
+  setAuthLoading(true);
+  setAuthMessage("");
+
+  try {
+    const csrfToken = await getCsrfToken();
+
+    const response = await fetch(`${AUTH_URL}/request-email-otp`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-XSRF-TOKEN": csrfToken,
+      },
+      body: JSON.stringify({ email: adminEmail.trim() }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.message || `Request failed: HTTP ${response.status}`);
+    }
+
+    setOtpRequested(true);
+    setAuthMessage(data.message || "Check your email for the verification code.");
+  } catch (err) {
+    console.error("OTP request error:", err);
+    setAuthMessage(err.message || "Could not request a verification code.");
+  } finally {
+    setAuthLoading(false);
+  }
+}
+
+async function handleVerifyOtp(event) {
+  event.preventDefault();
+  setAuthLoading(true);
+  setAuthMessage("");
+
+  try {
+    const csrfToken = await getCsrfToken();
+
+    const response = await fetch(`${AUTH_URL}/verify-email-otp`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-XSRF-TOKEN": csrfToken,
+      },
+      body: JSON.stringify({
+        email: adminEmail.trim(),
+        otp: otp.trim(),
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(data.message || `Verification failed: HTTP ${response.status}`);
+    }
+
+    setIsAdmin(true);
+    setOtp("");
+    setOtpRequested(false);
+    setAuthMessage("Admin login successful.");
+    await fetchVideos();
+  } catch (err) {
+    console.error("OTP verification error:", err);
+    setAuthMessage(err.message || "Could not verify the code.");
+  } finally {
+    setAuthLoading(false);
+  }
+}
+
+async function handleLogout() {
+  setAuthLoading(true);
+  setAuthMessage("");
+
+  try {
+    const csrfToken = await getCsrfToken();
+
+    const response = await fetch(`${AUTH_URL}/logout`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "X-XSRF-TOKEN": csrfToken,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Logout failed: HTTP ${response.status}`);
+    }
+
+    setIsAdmin(false);
+    setOtp("");
+    setOtpRequested(false);
+    setFormMessage("");
+    setAuthMessage("You have logged out.");
+  } catch (err) {
+    console.error("Logout error:", err);
+    setAuthMessage(err.message || "Could not log out.");
+  } finally {
+    setAuthLoading(false);
+  }
+}
+
+
+
+
+async function getCsrfToken() {
+  const response = await fetch(`${AUTH_URL}/csrf`, {
+    method: "GET",
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Could not initialize security: HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+
+  if (!data.token) {
+    throw new Error("The backend did not return a CSRF token.");
+  }
+
+  return data.token;
+ }
+
+async function checkAdminSession() {
+  try {
+    const response = await fetch(`${AUTH_URL}/status`, {
+      method: "GET",
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Session check failed: HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    setIsAdmin(data.isAdmin === true);
+  } catch (err) {
+    console.error("Admin session check failed:", err);
+    setIsAdmin(false);
+  }
+}
+
+useEffect(() => {
+  checkAdminSession();
+}, []);
 
   async function handleAddVideo(event) {
     event.preventDefault();
@@ -170,6 +329,98 @@ const deleteVideo = async (video) => {
       </header>
 
       <main id="home">
+       
+<section className="library-section" id="admin-access">
+  <div className="section-heading">
+    <div>
+      <span className="eyebrow">OWNER ACCESS</span>
+      <h2>{isAdmin ? "Admin access enabled" : "Admin login"}</h2>
+      <p className="section-description">
+        {isAdmin
+          ? "You are signed in and can manage your vault."
+          : "Sign in with your authorized email to manage your collection."}
+      </p>
+    </div>
+  </div>
+
+  {!isAdmin ? (
+    <form
+      className="add-video-form"
+      onSubmit={otpRequested ? handleVerifyOtp : handleRequestOtp}
+    >
+      <label>
+        Admin email
+        <input
+          type="email"
+          value={adminEmail}
+          onChange={(event) => setAdminEmail(event.target.value)}
+          placeholder="Enter your authorized email"
+          autoComplete="email"
+          required
+          disabled={otpRequested || authLoading}
+        />
+      </label>
+
+      {otpRequested && (
+        <label>
+          Six-digit email code
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={otp}
+            onChange={(event) =>
+              setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
+            }
+            placeholder="Enter the code"
+            pattern="[0-9]{6}"
+            maxLength={6}
+            required
+            disabled={authLoading}
+          />
+        </label>
+      )}
+
+      <button type="submit" disabled={authLoading}>
+        {authLoading
+          ? "Please wait..."
+          : otpRequested
+            ? "Verify code"
+            : "Send email code"}
+      </button>
+
+      {otpRequested && (
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={authLoading}
+          onClick={() => {
+            setOtpRequested(false);
+            setOtp("");
+            setAuthMessage("");
+          }}
+        >
+          Change email
+        </button>
+      )}
+
+      {authMessage && <p role="status">{authMessage}</p>}
+    </form>
+  ) : (
+    <div className="add-video-form">
+      <p>Signed in as {adminEmail}</p>
+      <button
+        type="button"
+        disabled={authLoading}
+        onClick={handleLogout}
+      >
+        {authLoading ? "Please wait..." : "Log out"}
+      </button>
+      {authMessage && <p role="status">{authMessage}</p>}
+    </div>
+  )}
+</section>
+
         <section className="hero">
           <div className="hero-content">
             <span className="eyebrow">
@@ -235,7 +486,8 @@ const deleteVideo = async (video) => {
             </div>
           </div>
 
-          <form className="add-video-form" onSubmit={handleAddVideo}>
+          {isAdmin && (
+  <form className="add-video-form" onSubmit={handleAddVideo}>
             <h3>Add a video to your vault</h3>
 
             <label>
@@ -306,8 +558,9 @@ const deleteVideo = async (video) => {
               {saving ? "Saving..." : "Add Video"}
             </button>
 
-            {formMessage && <p role="status">{formMessage}</p>}
-          </form>
+           {formMessage && <p role="status">{formMessage}</p>}
+  </form>
+)}
 
           <div className="toolbar">
             <label className="search-box">
@@ -392,13 +645,15 @@ const deleteVideo = async (video) => {
             <div className="video-grid">
               {filteredVideos.map((video) => (
                 <article className="video-card" key={video.id}>
-                          <button
-          type="button"
-          className="secondary-button"
-          onClick={() => deleteVideo(video)}
-        >
-          Delete
-        </button>
+                 {isAdmin && (
+  <button
+    type="button"
+    className="secondary-button"
+    onClick={() => deleteVideo(video)}
+  >
+    Delete
+  </button>
+)}
                   <div className="video-art">
                     <div className="video-art-decoration"></div>
                     <span className="video-type">

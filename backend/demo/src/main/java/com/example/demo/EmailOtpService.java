@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -15,7 +16,7 @@ import java.util.Map;
 @Service
 public class EmailOtpService {
 
-    @Value("${RESEND_API_KEY}")
+    @Value("${RESEND_API_KEY:}")
     private String resendApiKey;
 
     @Value("${app.otp.email.from:onboarding@resend.dev}")
@@ -26,6 +27,25 @@ public class EmailOtpService {
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
     public void sendOtp(String recipient, String otp) {
+
+        if (resendApiKey == null || resendApiKey.isBlank()) {
+            throw new IllegalStateException(
+                    "RESEND_API_KEY is missing. Configure it in your environment."
+            );
+        }
+
+        if (recipient == null || recipient.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Recipient email address cannot be empty."
+            );
+        }
+
+        if (otp == null || otp.isBlank()) {
+            throw new IllegalArgumentException(
+                    "OTP cannot be empty."
+            );
+        }
+
         try {
             String emailText =
                     "Your StreamVault verification code is: " + otp
@@ -34,7 +54,7 @@ public class EmailOtpService {
 
             Map<String, Object> payload = Map.of(
                     "from", fromEmail,
-                    "to", new String[]{recipient},
+                    "to", new String[]{recipient.trim()},
                     "subject", "Your StreamVault verification code",
                     "text", emailText
             );
@@ -43,6 +63,7 @@ public class EmailOtpService {
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create("https://api.resend.com/emails"))
+                    .timeout(java.time.Duration.ofSeconds(20))
                     .header("Authorization", "Bearer " + resendApiKey)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(
@@ -57,18 +78,23 @@ public class EmailOtpService {
             if (response.statusCode() < 200
                     || response.statusCode() >= 300) {
                 throw new IllegalStateException(
-                        "Resend email failed. HTTP "
-                        + response.statusCode() + ": "
-                        + response.body());
+                        "Resend rejected the email. HTTP "
+                        + response.statusCode()
+                        + ". Response: " + response.body()
+                );
             }
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(
-                    "Email sending was interrupted.", e);
-        } catch (Exception e) {
+                    "Sending the OTP email was interrupted.", e
+            );
+
+        } catch (IOException e) {
             throw new IllegalStateException(
-                    "Unable to send OTP through Resend.", e);
+                    "Could not connect to Resend. Check network connectivity.",
+                    e
+            );
         }
     }
 }

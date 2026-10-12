@@ -1,35 +1,74 @@
 
 package com.example.demo;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 @Service
 public class EmailOtpService {
 
-    private final JavaMailSender mailSender;
+    @Value("${RESEND_API_KEY}")
+    private String resendApiKey;
 
-    @Value("${app.otp.email.from}")
+    @Value("${app.otp.email.from:onboarding@resend.dev}")
     private String fromEmail;
 
-    public EmailOtpService(JavaMailSender mailSender) {
-        this.mailSender = mailSender;
-    }
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    private final HttpClient httpClient = HttpClient.newHttpClient();
 
     public void sendOtp(String recipient, String otp) {
-        SimpleMailMessage message = new SimpleMailMessage();
+        try {
+            String emailText =
+                    "Your StreamVault verification code is: " + otp
+                    + "\n\nThis code expires in 5 minutes."
+                    + "\nIf you did not request this code, ignore this email.";
 
-        message.setFrom(fromEmail);
-        message.setTo(recipient);
-        message.setSubject("Your StreamVault verification code");
-        message.setText(
-                "Your StreamVault verification code is: " + otp
-                + "\n\nThis code expires in 5 minutes."
-                + "\nIf you did not request this code, ignore this email."
-        );
+            Map<String, Object> payload = Map.of(
+                    "from", fromEmail,
+                    "to", new String[]{recipient},
+                    "subject", "Your StreamVault verification code",
+                    "text", emailText
+            );
 
-        mailSender.send(message);
+            String json = objectMapper.writeValueAsString(payload);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.resend.com/emails"))
+                    .header("Authorization", "Bearer " + resendApiKey)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(
+                            json, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofString()
+            );
+
+            if (response.statusCode() < 200
+                    || response.statusCode() >= 300) {
+                throw new IllegalStateException(
+                        "Resend email failed. HTTP "
+                        + response.statusCode() + ": "
+                        + response.body());
+            }
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(
+                    "Email sending was interrupted.", e);
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    "Unable to send OTP through Resend.", e);
+        }
     }
 }

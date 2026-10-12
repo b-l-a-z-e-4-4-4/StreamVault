@@ -1,4 +1,7 @@
+
 package com.example.demo;
+
+import java.util.List;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,8 +15,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.List;
-
 @Configuration
 public class SecurityConfig {
 
@@ -21,19 +22,47 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http)
             throws Exception {
 
+        CookieCsrfTokenRepository csrfTokenRepository =
+                CookieCsrfTokenRepository.withHttpOnlyFalse();
+
+        csrfTokenRepository.setCookieCustomizer(cookie -> cookie
+                .sameSite("None")
+                .secure(true)
+                .path("/")
+        );
+
         http
             .cors(Customizer.withDefaults())
+
             .csrf(csrf -> csrf
-                .csrfTokenRepository(
-                    CookieCsrfTokenRepository.withHttpOnlyFalse()))
+                .csrfTokenRepository(csrfTokenRepository)
+            )
+
             .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+                .sessionCreationPolicy(
+                    SessionCreationPolicy.IF_REQUIRED
+                )
+            )
+
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.GET, "/api/auth/csrf").permitAll()
+                .requestMatchers(
+                    HttpMethod.GET, "/api/auth/csrf"
+                ).permitAll()
+
                 .requestMatchers("/api/auth/**").permitAll()
-               .requestMatchers(HttpMethod.GET, "/api/videos", "/api/videos/**").permitAll()
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .anyRequest().authenticated());
+
+                .requestMatchers(
+                    HttpMethod.GET,
+                    "/api/videos",
+                    "/api/videos/**"
+                ).permitAll()
+
+                .requestMatchers(
+                    HttpMethod.OPTIONS, "/**"
+                ).permitAll()
+
+                .anyRequest().authenticated()
+            );
 
         return http.build();
     }
@@ -53,15 +82,18 @@ public class SecurityConfig {
         ));
 
         config.setAllowedHeaders(List.of(
-            "Content-Type", "X-XSRF-TOKEN", "X-CSRF-TOKEN"
+            "Content-Type",
+            "X-XSRF-TOKEN",
+            "X-CSRF-TOKEN"
         ));
 
         config.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source =
-            new UrlBasedCorsConfigurationSource();
+                new UrlBasedCorsConfigurationSource();
 
         source.registerCorsConfiguration("/**", config);
+
         return source;
     }
 }

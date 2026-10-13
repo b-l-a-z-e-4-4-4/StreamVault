@@ -13,6 +13,7 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 
 @Configuration
 public class SecurityConfig {
@@ -31,10 +32,12 @@ public class SecurityConfig {
         );
 
         http
-            .cors(Customizer.withDefaults())
-            .csrf(csrf -> csrf
-                .csrfTokenRepository(csrfTokenRepository)
-            )
+             .csrf(csrf -> csrf
+    .csrfTokenRepository(csrfTokenRepository)
+    .csrfTokenRequestHandler(
+        new CsrfTokenRequestAttributeHandler()
+    )
+)
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
             )

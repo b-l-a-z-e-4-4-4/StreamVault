@@ -428,54 +428,84 @@ function App() {
           )}
         </section>
 
-        <section className="hero">
-          <div className="hero-content">
-            <span className="eyebrow">
-              YOUR PERSONAL ENTERTAINMENT HUB
-            </span>
+        
+<section className="hero hero-cinematic">
+  <div className="hero-backdrop" aria-hidden="true" />
+  <div className="hero-grain" aria-hidden="true" />
 
-            <h1>
-              Your world.
-              <br />
-              <span>One vault.</span>
-            </h1>
+  <div className="hero-topline">
+    <span className="hero-kicker">
+      <span className="hero-kicker-line" />
+      THE STREAMVAULT COLLECTION
+    </span>
+    <span className="hero-edition">EST. FOR THE CURIOUS</span>
+  </div>
 
-            <p>
-              Discover and organize your favorite movies and series in one
-              place.
-            </p>
+  <div className="hero-content">
+    <div className="hero-feature-label">
+      <span className="hero-feature-dot" />
+      YOUR NEXT OBSESSION STARTS HERE
+    </div>
 
-            <a className="primary-button" href="#library">
-              Explore library <span>→</span>
-            </a>
+    <h1>
+      Stories that
+      <br />
+      <span>stay with you.</span>
+    </h1>
 
-            <div className="hero-stats">
-              <div>
-                <strong>{videos.length}</strong>
-                <span>Titles</span>
-              </div>
-              <div>
-                <strong>{categories.length - 1}</strong>
-                <span>Categories</span>
-              </div>
-              <div>
-                <strong>Live</strong>
-                <span>Database</span>
-              </div>
-            </div>
-          </div>
+    <p className="hero-description">
+      A world of cinema, collected in one place.
+      Discover your next favourite and make every
+      viewing moment feel extraordinary.
+    </p>
 
-          <div className="hero-art" aria-hidden="true">
-            <div className="art-orbit orbit-one"></div>
-            <div className="art-orbit orbit-two"></div>
-            <div className="art-circle">
-              <div className="play-icon">▶</div>
-            </div>
-            <div className="art-label label-one">MOVIES</div>
-            <div className="art-label label-two">SERIES</div>
-            <div className="art-label label-three">YOUR LIBRARY</div>
-          </div>
-        </section>
+    <div className="hero-actions">
+      <a className="primary-button hero-watch-button" href="#library">
+        <span className="hero-button-play" aria-hidden="true">▶</span>
+        Explore the collection
+        <span className="hero-button-arrow" aria-hidden="true">↗</span>
+      </a>
+
+      <a className="hero-secondary-link" href="#admin-access">
+        <span className="hero-secondary-icon" aria-hidden="true">＋</span>
+        Curate your vault
+      </a>
+    </div>
+
+    <div className="hero-bottom-meta">
+      <div className="hero-stat">
+        <span className="hero-stat-number">
+          {String(videos.length).padStart(2, "0")}
+        </span>
+        <span className="hero-stat-label">TITLES IN YOUR VAULT</span>
+      </div>
+
+      <span className="hero-meta-divider" />
+
+      <div className="hero-stat">
+        <span className="hero-stat-number">
+          {String(Math.max(0, categories.length - 1)).padStart(2, "0")}
+        </span>
+        <span className="hero-stat-label">COLLECTIONS</span>
+      </div>
+
+      <span className="hero-meta-note">
+        PERSONALLY YOURS. ALWAYS.
+      </span>
+    </div>
+  </div>
+
+  <div className="hero-image-caption" aria-hidden="true">
+    <span>THE ART OF WATCHING</span>
+    <span>01 / STREAMVAULT</span>
+  </div>
+
+  <a className="hero-scroll-cue" href="#library" aria-label="Scroll to collection">
+    <span className="hero-scroll-line" />
+    <span>SCROLL TO DISCOVER</span>
+  </a>
+</section>
+
 
         <section className="library-section" id="library">
           <div className="section-heading">

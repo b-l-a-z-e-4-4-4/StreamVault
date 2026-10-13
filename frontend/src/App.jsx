@@ -1,10 +1,11 @@
-
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import "./App.css";
 
 const API_URL = "https://streamvault-lmsr.onrender.com/api/videos";
 const AUTH_URL = "https://streamvault-lmsr.onrender.com/api/auth";
+const USER_AUTH_URL = "https://streamvault-lmsr.onrender.com/api/user-auth";
+const PROGRESS_URL = "https://streamvault-lmsr.onrender.com/api/progress";
 const CLOUDINARY_SIGNATURE_URL =
   "https://streamvault-lmsr.onrender.com/api/cloudinary/signature";
 
@@ -21,10 +22,9 @@ const emptyUpload = {
   type: "Movie",
   description: "",
 };
-function getVideoThumbnail(video) {
-  if (video?.thumbnailUrl) return video.thumbnailUrl;
-  if (!video?.videoUrl) return "";
 
+function getGeneratedVideoThumbnail(video) {
+  if (!video?.videoUrl) return "";
   const url = video.videoUrl;
 
   if (
@@ -38,13 +38,33 @@ function getVideoThumbnail(video) {
 
   return "";
 }
+
+function getVideoThumbnail(video) {
+  return video?.thumbnailUrl || getGeneratedVideoThumbnail(video);
+}
+
+function handleThumbnailError(video, event) {
+  const fallback = getGeneratedVideoThumbnail(video);
+
+  if (
+    fallback &&
+    !event.currentTarget.dataset.fallbackAttempted
+  ) {
+    event.currentTarget.dataset.fallbackAttempted = "true";
+    event.currentTarget.src = fallback;
+    return;
+  }
+
+  event.currentTarget.style.display = "none";
+}
+
 function App() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Normalize paths so /admin/ works the same as /admin.
   const currentPath = location.pathname.replace(/\/+$/, "") || "/";
   const isAdminRoute = currentPath === "/admin";
+  const isLoginRoute = currentPath === "/login";
   const isWatchRoute = currentPath.startsWith("/watch/");
   const watchId = isWatchRoute
     ? decodeURIComponent(currentPath.slice("/watch/".length))
@@ -71,6 +91,20 @@ function App() {
   const [otpRequested, setOtpRequested] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
+
+  const [isUser, setIsUser] = useState(false);
+  const [userSessionChecked, setUserSessionChecked] = useState(false);
+  const [signedInUserEmail, setSignedInUserEmail] = useState("");
+  const [userEmailInput, setUserEmailInput] = useState("");
+  const [userPhoneInput, setUserPhoneInput] = useState("");
+  const [userOtp, setUserOtp] = useState("");
+  const [userOtpRequested, setUserOtpRequested] = useState(false);
+  const [userAuthBusy, setUserAuthBusy] = useState(false);
+  const [userAuthMessage, setUserAuthMessage] = useState("");
+  const [playbackMessage, setPlaybackMessage] = useState("");
+
+  const videoRef = useRef(null);
+  const lastSavedTimeRef = useRef(0);
 
   const [uploadData, setUploadData] = useState(emptyUpload);
   const [videoFile, setVideoFile] = useState(null);
@@ -107,7 +141,9 @@ function App() {
     });
 
     if (!response.ok) {
-      throw new Error(`Could not initialize security: HTTP ${response.status}`);
+      throw new Error(
+        `Could not initialize security: HTTP ${response.status}`
+      );
     }
 
     const data = await response.json();
@@ -127,7 +163,9 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`Session check failed: HTTP ${response.status}`);
+        throw new Error(
+          `Session check failed: HTTP ${response.status}`
+        );
       }
 
       const data = await response.json();
@@ -140,10 +178,277 @@ function App() {
     }
   }
 
+  async function checkUserSession() {
+    try {
+      const response = await fetch(`${USER_AUTH_URL}/status`, {
+        method: "GET",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Session check failed: HTTP ${response.status}`
+        );
+      }
+
+      const data = await response.json();
+      setIsUser(data.isUser === true);
+      setSignedInUserEmail(data.email || "");
+    } catch (err) {
+      console.error("User session check failed:", err);
+      setIsUser(false);
+      setSignedInUserEmail("");
+    } finally {
+      setUserSessionChecked(true);
+    }
+  }
+
+  async function handleRequestUserOtp(event) {
+    event.preventDefault();
+    setUserAuthBusy(true);
+    setUserAuthMessage("");
+
+    try {
+      const csrfToken = await getCsrfToken();
+
+      const response = await fetch(
+        `${USER_AUTH_URL}/request-email-otp`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-XSRF-TOKEN": csrfToken,
+          },
+          body: JSON.stringify({
+            email: userEmailInput.trim().toLowerCase(),
+            phoneNumber: userPhoneInput.trim(),
+          }),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || `OTP request failed: HTTP ${response.status}`
+        );
+      }
+
+      setUserOtpRequested(true);
+      setUserAuthMessage(
+        data.message || "Check your email for your six-digit code."
+      );
+    } catch (err) {
+      console.error("User OTP request error:", err);
+      setUserAuthMessage(
+        err.message || "Could not request a sign-in code."
+      );
+    } finally {
+      setUserAuthBusy(false);
+    }
+  }
+
+  async function handleVerifyUserOtp(event) {
+    event.preventDefault();
+    setUserAuthBusy(true);
+    setUserAuthMessage("");
+
+    try {
+      const csrfToken = await getCsrfToken();
+
+      const response = await fetch(
+        `${USER_AUTH_URL}/verify-email-otp`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-XSRF-TOKEN": csrfToken,
+          },
+          body: JSON.stringify({
+            email: userEmailInput.trim().toLowerCase(),
+            phoneNumber: userPhoneInput.trim(),
+            otp: userOtp.trim(),
+          }),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || `Verification failed: HTTP ${response.status}`
+        );
+      }
+
+      setUserOtp("");
+      setUserOtpRequested(false);
+      setIsAdmin(false);
+      setSignedInUserEmail(userEmailInput.trim().toLowerCase());
+      setUserAuthMessage("Sign-in successful.");
+
+      await checkUserSession();
+
+      const query = new URLSearchParams(location.search);
+      const destination = query.get("returnTo") || "/";
+
+      navigate(
+        destination.startsWith("/") && !destination.startsWith("//")
+          ? destination
+          : "/"
+      );
+    } catch (err) {
+      console.error("User OTP verification error:", err);
+      setUserAuthMessage(
+        err.message || "Could not verify the code."
+      );
+    } finally {
+      setUserAuthBusy(false);
+    }
+  }
+
+  async function handleUserLogout() {
+    setUserAuthBusy(true);
+    setUserAuthMessage("");
+
+    try {
+      const csrfToken = await getCsrfToken();
+
+      const response = await fetch(`${USER_AUTH_URL}/logout`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "X-XSRF-TOKEN": csrfToken },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Logout failed: HTTP ${response.status}`);
+      }
+
+      setIsUser(false);
+      setSignedInUserEmail("");
+      setUserAuthMessage("You have logged out.");
+      navigate("/");
+    } catch (err) {
+      console.error("User logout error:", err);
+      setUserAuthMessage(err.message || "Could not log out.");
+    } finally {
+      setUserAuthBusy(false);
+    }
+  }
+
+  async function handleVideoMetadataLoaded() {
+    const player = videoRef.current;
+
+    if (!player || !watchVideo || !isUser) return;
+
+    try {
+      const response = await fetch(
+        `${PROGRESS_URL}/${encodeURIComponent(watchVideo.id)}`,
+        {
+          method: "GET",
+          credentials: "include",
+        }
+      );
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+      const savedSeconds = Number(data.positionSeconds || 0);
+      const duration = Number(player.duration || 0);
+
+      if (data.completed === true) {
+        setPlaybackMessage(
+          "You've finished this video. You can replay it from the beginning."
+        );
+        lastSavedTimeRef.current = 0;
+        return;
+      }
+
+      if (
+        savedSeconds > 5 &&
+        (!duration || savedSeconds < duration - 5)
+      ) {
+        player.currentTime = savedSeconds;
+        lastSavedTimeRef.current = savedSeconds;
+
+        const minutes = Math.floor(savedSeconds / 60);
+        const seconds = Math.floor(savedSeconds % 60)
+          .toString()
+          .padStart(2, "0");
+
+        setPlaybackMessage(`Resuming from ${minutes}:${seconds}.`);
+      }
+    } catch (err) {
+      console.warn("Could not load playback progress:", err);
+    }
+  }
+
+  async function savePlaybackProgress(force = false) {
+    const player = videoRef.current;
+
+    if (
+      !isUser ||
+      !watchVideo ||
+      !player ||
+      !Number.isFinite(player.duration) ||
+      player.duration <= 0
+    ) {
+      return;
+    }
+
+    const position = Math.max(0, Math.floor(player.currentTime || 0));
+
+    if (position <= 0) return;
+
+    if (
+      !force &&
+      Math.abs(position - lastSavedTimeRef.current) < 10
+    ) {
+      return;
+    }
+
+    lastSavedTimeRef.current = position;
+
+    try {
+      const csrfToken = await getCsrfToken();
+
+      const response = await fetch(
+        `${PROGRESS_URL}/${encodeURIComponent(watchVideo.id)}`,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "X-XSRF-TOKEN": csrfToken,
+          },
+          body: JSON.stringify({
+            positionSeconds: position,
+            durationSeconds: Math.floor(player.duration),
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Progress save failed: HTTP ${response.status}`
+        );
+      }
+    } catch (err) {
+      console.warn("Could not save playback progress:", err);
+    }
+  }
+
   useEffect(() => {
     fetchVideos();
     checkAdminSession();
+    checkUserSession();
   }, []);
+
+  useEffect(() => {
+    lastSavedTimeRef.current = 0;
+    setPlaybackMessage("");
+  }, [watchVideo?.id]);
 
   async function handleRequestOtp(event) {
     event.preventDefault();
@@ -214,6 +519,8 @@ function App() {
 
       setOtp("");
       setOtpRequested(false);
+      setIsUser(false);
+      setSignedInUserEmail("");
       setAuthMessage("Admin login successful.");
 
       await checkAdminSession();
@@ -244,6 +551,8 @@ function App() {
       }
 
       setIsAdmin(false);
+      setIsUser(false);
+      setSignedInUserEmail("");
       setOtp("");
       setOtpRequested(false);
       setFormMessage("");
@@ -281,7 +590,9 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error((await response.text()) || `HTTP ${response.status}`);
+        throw new Error(
+          (await response.text()) || `HTTP ${response.status}`
+        );
       }
 
       setFormData({ ...emptyForm });
@@ -322,7 +633,9 @@ function App() {
       );
 
       if (!response.ok) {
-        throw new Error((await response.text()) || `HTTP ${response.status}`);
+        throw new Error(
+          (await response.text()) || `HTTP ${response.status}`
+        );
       }
 
       setFormMessage(`Deleted "${video.title}" successfully.`);
@@ -347,7 +660,9 @@ function App() {
       credentials: "include",
     });
 
-    const signatureData = await signatureResponse.json().catch(() => ({}));
+    const signatureData = await signatureResponse
+      .json()
+      .catch(() => ({}));
 
     if (!signatureResponse.ok) {
       throw new Error(
@@ -384,7 +699,9 @@ function App() {
       }
     );
 
-    const uploadResult = await uploadResponse.json().catch(() => ({}));
+    const uploadResult = await uploadResponse
+      .json()
+      .catch(() => ({}));
 
     if (!uploadResponse.ok) {
       throw new Error(
@@ -430,12 +747,14 @@ function App() {
       setUploadProgress("Uploading video to Cloudinary…");
 
       const videoResult = await uploadToCloudinary(videoFile, "video");
-
       let thumbnailResult = null;
 
       if (thumbnailFile) {
         setUploadProgress("Uploading thumbnail…");
-        thumbnailResult = await uploadToCloudinary(thumbnailFile, "image");
+        thumbnailResult = await uploadToCloudinary(
+          thumbnailFile,
+          "image"
+        );
       }
 
       setUploadProgress("Saving video details…");
@@ -483,6 +802,7 @@ function App() {
 
       const videoInput = document.getElementById("mp4-file");
       const thumbnailInput = document.getElementById("thumbnail-file");
+
       if (videoInput) videoInput.value = "";
       if (thumbnailInput) thumbnailInput.value = "";
 
@@ -524,12 +844,173 @@ function App() {
     });
   }, [videos, search, category]);
 
-  // VIDEO PLAYER ROUTE — separate from the admin route.
+  // Ordinary-user login: email is verified by OTP.
+  // The phone number is contact information until SMS verification is configured.
+  if (isLoginRoute) {
+    const requestedReturnTo =
+      new URLSearchParams(location.search).get("returnTo") || "/";
+
+    const safeReturnTo =
+      requestedReturnTo.startsWith("/") &&
+      !requestedReturnTo.startsWith("//")
+        ? requestedReturnTo
+        : "/";
+
+    return (
+      <div className="app admin-page">
+        <header className="navbar">
+          <Link className="brand" to="/" aria-label="StreamVault home">
+            <span className="brand-icon">S</span>
+            <span>
+              Stream<span className="brand-highlight">Vault</span>
+            </span>
+          </Link>
+
+          <Link className="secondary-button" to="/">
+            Public website
+          </Link>
+        </header>
+
+        <main className="admin-main">
+          <section className="library-section">
+            <span className="eyebrow">YOUR STREAMVAULT ACCOUNT</span>
+            <h1>Sign in to watch</h1>
+
+            <p className="section-description">
+              We'll email you a six-digit code. Your phone number is saved
+              as contact information and is not SMS-verified yet.
+            </p>
+
+            {!userSessionChecked ? (
+              <div className="status-panel">Checking your session…</div>
+            ) : isUser ? (
+              <div className="add-video-form">
+                <h2>You're signed in</h2>
+                <p>{signedInUserEmail}</p>
+                <Link className="primary-button" to={safeReturnTo}>
+                  Continue to StreamVault
+                </Link>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={handleUserLogout}
+                  disabled={userAuthBusy}
+                >
+                  {userAuthBusy ? "Please wait…" : "Log out"}
+                </button>
+              </div>
+            ) : (
+              <form
+                className="add-video-form"
+                onSubmit={
+                  userOtpRequested
+                    ? handleVerifyUserOtp
+                    : handleRequestUserOtp
+                }
+              >
+                <h2>
+                  {userOtpRequested
+                    ? "Verify your email"
+                    : "Create an account or sign in"}
+                </h2>
+
+                <label>
+                  Email address
+                  <input
+                    type="email"
+                    value={userEmailInput}
+                    onChange={(event) =>
+                      setUserEmailInput(event.target.value)
+                    }
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    required
+                    disabled={userOtpRequested || userAuthBusy}
+                  />
+                </label>
+
+                <label>
+                  Phone number (contact only; not verified by SMS)
+                  <input
+                    type="tel"
+                    value={userPhoneInput}
+                    onChange={(event) =>
+                      setUserPhoneInput(event.target.value)
+                    }
+                    placeholder="e.g. +91 98765 43210"
+                    autoComplete="tel"
+                    required
+                    disabled={userAuthBusy}
+                  />
+                </label>
+
+                {userOtpRequested && (
+                  <label>
+                    Six-digit email code
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={userOtp}
+                      onChange={(event) =>
+                        setUserOtp(
+                          event.target.value.replace(/\D/g, "").slice(0, 6)
+                        )
+                      }
+                      placeholder="Enter code"
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      required
+                      disabled={userAuthBusy}
+                    />
+                  </label>
+                )}
+
+                <button type="submit" disabled={userAuthBusy}>
+                  {userAuthBusy
+                    ? "Please wait…"
+                    : userOtpRequested
+                      ? "Verify code and sign in"
+                      : "Send email code"}
+                </button>
+
+                {userOtpRequested && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={userAuthBusy}
+                    onClick={() => {
+                      setUserOtpRequested(false);
+                      setUserOtp("");
+                      setUserAuthMessage("");
+                    }}
+                  >
+                    Change email or phone
+                  </button>
+                )}
+
+                {userAuthMessage && (
+                  <p role="status">{userAuthMessage}</p>
+                )}
+
+                <p className="section-description">
+                  Administrator access remains separate.{" "}
+                  <Link to="/admin">Administrator sign in</Link>
+                </p>
+              </form>
+            )}
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  // Video player route: a normal user or administrator must be signed in.
   if (isWatchRoute) {
-    if (loading) {
+    if (loading || !sessionChecked || !userSessionChecked) {
       return (
         <main className="admin-main">
-          <p>Loading video…</p>
+          <p>Loading your video…</p>
         </main>
       );
     }
@@ -546,31 +1027,64 @@ function App() {
       );
     }
 
+    if (!isUser && !isAdmin) {
+      return (
+        <main className="admin-main">
+          <Link to="/">← Back to StreamVault</Link>
+          <h1>Sign in to watch</h1>
+          <p>
+            Please sign in with your email to watch videos and save your
+            playback progress.
+          </p>
+          <Link
+            className="primary-button"
+            to={`/login?returnTo=${encodeURIComponent(currentPath)}`}
+          >
+            Sign in to continue →
+          </Link>
+        </main>
+      );
+    }
+
     return (
       <main className="admin-main">
         <Link to="/">← Back to StreamVault</Link>
         <h1>{watchVideo.title}</h1>
 
         <video
-  controls
-  muted={false}
-  playsInline
-  preload="metadata"
-  style={{
-    width: "100%",
-    maxWidth: "1000px",
-    display: "block",
-  }}
-  src={watchVideo.videoUrl}
->
-  Your browser does not support video playback.
-</video>
+          ref={videoRef}
+          controls
+          muted={false}
+          playsInline
+          preload="metadata"
+          poster={getVideoThumbnail(watchVideo) || undefined}
+          style={{
+            width: "100%",
+            maxWidth: "1000px",
+            display: "block",
+            background: "#000",
+          }}
+          src={watchVideo.videoUrl}
+          onLoadedMetadata={handleVideoMetadataLoaded}
+          onTimeUpdate={() => savePlaybackProgress(false)}
+          onPause={() => savePlaybackProgress(true)}
+          onEnded={() => savePlaybackProgress(true)}
+        >
+          Your browser does not support video playback.
+        </video>
+
+        {playbackMessage && (
+          <p className="playback-status" role="status">
+            {playbackMessage}
+          </p>
+        )}
+
         <p>{watchVideo.description}</p>
       </main>
     );
   }
 
-  // ADMIN DASHBOARD
+  // Administrator dashboard.
   if (isAdminRoute) {
     return (
       <div className="app admin-page">
@@ -642,7 +1156,9 @@ function App() {
                       autoComplete="one-time-code"
                       value={otp}
                       onChange={(event) =>
-                        setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
+                        setOtp(
+                          event.target.value.replace(/\D/g, "").slice(0, 6)
+                        )
                       }
                       placeholder="Enter code"
                       pattern="[0-9]{6}"
@@ -754,16 +1270,16 @@ function App() {
                   <label>
                     MP4 video file
                     <input
-  id="mp4-file"
-  type="file"
-  accept="video/*,.mp4,.mov,.webm,.m4v"
-  onChange={(event) => {
-    const file = event.target.files?.[0] || null;
-    setVideoFile(file);
-  }}
-  required
-  disabled={uploading}
-/>
+                      id="mp4-file"
+                      type="file"
+                      accept="video/*,.mp4,.mov,.webm,.m4v"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] || null;
+                        setVideoFile(file);
+                      }}
+                      required
+                      disabled={uploading}
+                    />
                   </label>
 
                   {videoFile && (
@@ -796,8 +1312,8 @@ function App() {
 
                   <p className="section-description">
                     Quality options such as 360p, 480p, 720p, and 1080p only
-                    work when the media provider has generated or enabled those
-                    renditions. Uploading one MP4 does not create every
+                    work when the media provider has generated or enabled
+                    those renditions. Uploading one MP4 does not create every
                     resolution automatically.
                   </p>
 
@@ -821,7 +1337,10 @@ function App() {
                     <input
                       value={formData.title}
                       onChange={(event) =>
-                        setFormData({ ...formData, title: event.target.value })
+                        setFormData({
+                          ...formData,
+                          title: event.target.value,
+                        })
                       }
                       required
                       placeholder="Title"
@@ -848,7 +1367,10 @@ function App() {
                     <select
                       value={formData.type}
                       onChange={(event) =>
-                        setFormData({ ...formData, type: event.target.value })
+                        setFormData({
+                          ...formData,
+                          type: event.target.value,
+                        })
                       }
                     >
                       <option value="Movie">Movie</option>
@@ -899,25 +1421,49 @@ function App() {
                       <article className="video-card" key={video.id}>
                         <div className="video-art">
                           {getVideoThumbnail(video) ? (
-  <img
-    className="video-thumbnail"
-    src={getVideoThumbnail(video)}
-    alt={`${video.title || "Video"} thumbnail`}
-    loading="lazy"
-    onError={(event) => {
-      event.currentTarget.style.display = "none";
-    }}
-  />
-) : (
-  <span className="video-art-letter">
-    {(video.title || "S").charAt(0).toUpperCase()}
-  </span>
-)}
+                            <img
+                              className="video-thumbnail"
+                              src={getVideoThumbnail(video)}
+                              alt={`${video.title || "Video"} thumbnail`}
+                              loading="lazy"
+                              onError={(event) =>
+                                handleThumbnailError(video, event)
+                              }
+                            />
+                          ) : (
+                            <span className="video-art-letter">
+                              {(video.title || "S")
+                                .charAt(0)
+                                .toUpperCase()}
+                            </span>
+                          )}
                         </div>
+                        {video.videoUrl && (
+  <video
+    className="admin-video-preview"
+    controls
+    playsInline
+    preload="none"
+    poster={getVideoThumbnail(video) || undefined}
+    src={video.videoUrl}
+  >
+    Your browser does not support video playback.
+  </video>
+)}
 
                         <div className="video-details">
                           <h3>{video.title || "Untitled video"}</h3>
                           <p>{video.category || "Uncategorized"}</p>
+
+                          {video.videoUrl && (
+                            <Link
+                              className="primary-button"
+                              to={`/watch/${encodeURIComponent(video.id)}`}
+                            >
+                              Watch video →
+                            </Link>
+                          )}
+
                           <button
                             className="secondary-button"
                             type="button"
@@ -938,7 +1484,7 @@ function App() {
     );
   }
 
-  // PUBLIC HOMEPAGE
+  // Public homepage.
   return (
     <div className="app">
       <header className="navbar">
@@ -954,14 +1500,31 @@ function App() {
           <a href="#library">My Library</a>
         </nav>
 
-        <button
-          className="refresh-button"
-          onClick={fetchVideos}
-          disabled={loading}
-          type="button"
-        >
-          {loading ? "Loading…" : "↻ Refresh"}
-        </button>
+        <div className="public-header-actions">
+          {isUser ? (
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={handleUserLogout}
+              disabled={userAuthBusy}
+            >
+              {userAuthBusy ? "Please wait…" : "Log out"}
+            </button>
+          ) : (
+            <Link className="secondary-button" to="/login">
+              Sign in
+            </Link>
+          )}
+
+          <button
+            className="refresh-button"
+            onClick={fetchVideos}
+            disabled={loading}
+            type="button"
+          >
+            {loading ? "Loading…" : "↻ Refresh"}
+          </button>
+        </div>
       </header>
 
       <main id="home">
@@ -999,9 +1562,13 @@ function App() {
                 className="primary-button hero-watch-button"
                 href="#library"
               >
-                <span className="hero-button-play" aria-hidden="true">▶</span>
+                <span className="hero-button-play" aria-hidden="true">
+                  ▶
+                </span>
                 Explore the collection
-                <span className="hero-button-arrow" aria-hidden="true">↗</span>
+                <span className="hero-button-arrow" aria-hidden="true">
+                  ↗
+                </span>
               </a>
             </div>
 
@@ -1010,7 +1577,9 @@ function App() {
                 <span className="hero-stat-number">
                   {String(videos.length).padStart(2, "0")}
                 </span>
-                <span className="hero-stat-label">TITLES IN YOUR VAULT</span>
+                <span className="hero-stat-label">
+                  TITLES IN YOUR VAULT
+                </span>
               </div>
 
               <span className="hero-meta-divider" />
@@ -1022,7 +1591,9 @@ function App() {
                 <span className="hero-stat-label">COLLECTIONS</span>
               </div>
 
-              <span className="hero-meta-note">PERSONALLY YOURS. ALWAYS.</span>
+              <span className="hero-meta-note">
+                PERSONALLY YOURS. ALWAYS.
+              </span>
             </div>
           </div>
 
@@ -1110,11 +1681,13 @@ function App() {
           {!loading && !error && filteredVideos.length === 0 && (
             <div className="status-panel">
               <div className="empty-icon">▤</div>
+
               <h3>
                 {videos.length === 0
                   ? "Your vault is waiting"
                   : "No matching titles"}
               </h3>
+
               <p>
                 {videos.length === 0
                   ? "Published videos will appear here."
@@ -1144,12 +1717,13 @@ function App() {
                     {getVideoThumbnail(video) ? (
                       <img
                         className="video-thumbnail"
+                        key={`${video.id}-${video.thumbnailUrl || video.videoUrl || "poster"}`}
                         src={getVideoThumbnail(video)}
                         alt={`${video.title || "Video"} thumbnail`}
                         loading="lazy"
-                        onError={(event) => {
-                          event.currentTarget.style.display = "none";
-                        }}
+                        onError={(event) =>
+                          handleThumbnailError(video, event)
+                        }
                       />
                     ) : (
                       <>
@@ -1160,8 +1734,12 @@ function App() {
                       </>
                     )}
 
-                    <span className="video-type">{video.type || "Video"}</span>
-                    <span className="video-play" aria-hidden="true">▶</span>
+                    <span className="video-type">
+                      {video.type || "Video"}
+                    </span>
+                    <span className="video-play" aria-hidden="true">
+                      ▶
+                    </span>
                   </div>
 
                   <div className="video-details">
@@ -1172,7 +1750,9 @@ function App() {
                     </div>
 
                     <h3>{video.title || "Untitled video"}</h3>
-                    <p>{video.description || "No description available."}</p>
+                    <p>
+                      {video.description || "No description available."}
+                    </p>
 
                     {video.videoUrl && (
                       <Link
@@ -1199,10 +1779,6 @@ function App() {
         </Link>
 
         <p>One place for everything you love.</p>
-
-        <Link className="secondary-button" to="/admin">
-          Admin dashboard
-        </Link>
 
         <span className="footer-status">
           <span className="status-dot" />

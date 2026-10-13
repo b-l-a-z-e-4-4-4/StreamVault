@@ -1561,3 +1561,41 @@ form button {
   font-size: 0.9rem;
   color: #aaa;
 }
+/* StreamVault account, playback, and admin video controls */
+
+.public-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-video-preview {
+  display: block;
+  width: calc(100% - 24px);
+  max-height: 180px;
+  margin: 12px auto 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  background: #000;
+  object-fit: contain;
+}
+
+.playback-status {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+@media (max-width: 650px) {
+  .public-header-actions {
+    gap: 6px;
+  }
+
+  .public-header-actions .secondary-button,
+  .public-header-actions .refresh-button {
+    min-height: 36px;
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+}

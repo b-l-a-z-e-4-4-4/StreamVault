@@ -1,4 +1,3 @@
-
 package com.example.demo;
 
 import java.util.List;
@@ -33,34 +32,24 @@ public class SecurityConfig {
 
         http
             .cors(Customizer.withDefaults())
-
             .csrf(csrf -> csrf
                 .csrfTokenRepository(csrfTokenRepository)
             )
-
             .sessionManagement(session -> session
-                .sessionCreationPolicy(
-                    SessionCreationPolicy.IF_REQUIRED
-                )
+                .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
             )
-
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
                     HttpMethod.GET, "/api/auth/csrf"
                 ).permitAll()
-
                 .requestMatchers("/api/auth/**").permitAll()
-
+                .requestMatchers("/api/user-auth/**").permitAll()
                 .requestMatchers(
-                    HttpMethod.GET,
-                    "/api/videos",
-                    "/api/videos/**"
+                    HttpMethod.GET, "/api/videos", "/api/videos/**"
                 ).permitAll()
-
                 .requestMatchers(
                     HttpMethod.OPTIONS, "/**"
                 ).permitAll()
-
                 .anyRequest().authenticated()
             );
 

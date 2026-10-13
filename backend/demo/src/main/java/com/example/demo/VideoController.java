@@ -2,6 +2,7 @@
 package com.example.demo;
 
 import java.util.List;
+import java.util.Map;
 
 import jakarta.servlet.http.HttpSession;
 
@@ -16,11 +17,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@CrossOrigin(origins = {
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "https://stream-vault-dun.vercel.app"
-})
+@CrossOrigin(
+    origins = {
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "https://stream-vault-dun.vercel.app"
+    },
+    allowCredentials = "true"
+)
 @RequestMapping("/api/videos")
 public class VideoController {
 
@@ -36,7 +40,9 @@ public class VideoController {
 
     @GetMapping
     public List<Video> getVideos() {
-        return videoRepository.findAll();
+        return videoRepository.findAll().stream()
+                .filter(Video::isPublished)
+                .toList();
     }
 
     @PostMapping("/demo")
@@ -46,8 +52,44 @@ public class VideoController {
 
         if (!adminSessionService.isAdmin(session)) {
             return ResponseEntity.status(401)
-                    .body("Admin login required.");
+                    .body(Map.of("error", "Admin login required."));
         }
+
+        return ResponseEntity.ok(videoRepository.save(video));
+    }
+
+    @PostMapping("/upload-metadata")
+    public ResponseEntity<?> saveUploadedVideo(
+            @RequestBody Video video,
+            HttpSession session) {
+
+        if (!adminSessionService.isAdmin(session)) {
+            return ResponseEntity.status(401)
+                    .body(Map.of("error", "Admin login required."));
+        }
+
+        if (video.getTitle() == null
+                || video.getTitle().isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Video title is required."));
+        }
+
+        if (video.getVideoUrl() == null
+                || !video.getVideoUrl().startsWith(
+                    "https://res.cloudinary.com/")) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Invalid Cloudinary video URL."));
+        }
+
+        if (video.getPublicId() == null
+                || video.getPublicId().isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Cloudinary public ID is required."));
+        }
+
+        video.setId(null);
+        video.setTitle(video.getTitle().trim());
+        video.setPublished(true);
 
         Video savedVideo = videoRepository.save(video);
         return ResponseEntity.ok(savedVideo);
@@ -60,7 +102,7 @@ public class VideoController {
 
         if (!adminSessionService.isAdmin(session)) {
             return ResponseEntity.status(401)
-                    .body("Admin login required.");
+                    .body(Map.of("error", "Admin login required."));
         }
 
         if (!videoRepository.existsById(id)) {

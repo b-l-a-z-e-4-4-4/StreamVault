@@ -5,6 +5,13 @@ import "./App.css";
 const API_URL = "https://streamvault-lmsr.onrender.com/api/videos";
 const AUTH_URL = "https://streamvault-lmsr.onrender.com/api/auth";
 
+const emptyForm = {
+  title: "",
+  category: "Sci-Fi",
+  type: "Movie",
+  description: "",
+};
+
 function App() {
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -12,15 +19,10 @@ function App() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
 
-  const [formData, setFormData] = useState({
-    title: "",
-    category: "Sci-Fi",
-    type: "Movie",
-    description: "",
-  });
-
+  const [formData, setFormData] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [formMessage, setFormMessage] = useState("");
+
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminEmail, setAdminEmail] = useState("");
   const [otp, setOtp] = useState("");
@@ -44,168 +46,173 @@ function App() {
     } catch (err) {
       console.error("Video API error:", err);
       setError(
-        "Could not connect to StreamVault. Make sure the Spring Boot backend is running."
+        "Could not load StreamVault videos. Please try refreshing."
       );
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    fetchVideos();
-  }, []);
-  
-async function handleRequestOtp(event) {
-  
-  event.preventDefault();
-  setAuthLoading(true);
-  setAuthMessage("");
-
-  try {
-    const csrfToken = await getCsrfToken();
-
-    const response = await fetch(`${AUTH_URL}/request-email-otp`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        "X-XSRF-TOKEN": csrfToken,
-      },
-      body: JSON.stringify({ email: adminEmail.trim() }),
-    });
-
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      throw new Error(data.message || `Request failed: HTTP ${response.status}`);
-    }
-
-    setOtpRequested(true);
-    setAuthMessage(data.message || "Check your email for the verification code.");
-  } catch (err) {
-    console.error("OTP request error:", err);
-    setAuthMessage(err.message || "Could not request a verification code.");
-  } finally {
-    setAuthLoading(false);
-  }
-}
-
-async function handleVerifyOtp(event) {
-  event.preventDefault();
-  setAuthLoading(true);
-  setAuthMessage("");
-
-  try {
-    const csrfToken = await getCsrfToken();
-
-    const response = await fetch(`${AUTH_URL}/verify-email-otp`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        "X-XSRF-TOKEN": csrfToken,
-      },
-      body: JSON.stringify({
-        email: adminEmail.trim(),
-        otp: otp.trim(),
-      }),
-    });
-
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      throw new Error(data.message || `Verification failed: HTTP ${response.status}`);
-    }
-
-    setIsAdmin(true);
-    setOtp("");
-    setOtpRequested(false);
-    setAuthMessage("Admin login successful.");
-    await fetchVideos();
-  } catch (err) {
-    console.error("OTP verification error:", err);
-    setAuthMessage(err.message || "Could not verify the code.");
-  } finally {
-    setAuthLoading(false);
-  }
-}
-
-async function handleLogout() {
-  setAuthLoading(true);
-  setAuthMessage("");
-
-  try {
-    const csrfToken = await getCsrfToken();
-
-    const response = await fetch(`${AUTH_URL}/logout`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "X-XSRF-TOKEN": csrfToken,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Logout failed: HTTP ${response.status}`);
-    }
-
-    setIsAdmin(false);
-    setOtp("");
-    setOtpRequested(false);
-    setFormMessage("");
-    setAuthMessage("You have logged out.");
-  } catch (err) {
-    console.error("Logout error:", err);
-    setAuthMessage(err.message || "Could not log out.");
-  } finally {
-    setAuthLoading(false);
-  }
-}
-
-
-
-
-async function getCsrfToken() {
-  const response = await fetch(`${AUTH_URL}/csrf`, {
-    method: "GET",
-    credentials: "include",
-  });
-
-  if (!response.ok) {
-    throw new Error(`Could not initialize security: HTTP ${response.status}`);
-  }
-
-  const data = await response.json();
-
-  if (!data.token) {
-    throw new Error("The backend did not return a CSRF token.");
-  }
-
-  return data.token;
- }
-
-async function checkAdminSession() {
-  try {
-    const response = await fetch(`${AUTH_URL}/status`, {
+  async function getCsrfToken() {
+    const response = await fetch(`${AUTH_URL}/csrf`, {
       method: "GET",
       credentials: "include",
     });
 
     if (!response.ok) {
-      throw new Error(`Session check failed: HTTP ${response.status}`);
+      throw new Error(
+        `Could not initialize security: HTTP ${response.status}`
+      );
     }
 
     const data = await response.json();
-    setIsAdmin(data.isAdmin === true);
-  } catch (err) {
-    console.error("Admin session check failed:", err);
-    setIsAdmin(false);
-  }
-}
 
-useEffect(() => {
-  checkAdminSession();
-}, []);
+    if (!data.token) {
+      throw new Error("The backend did not return a CSRF token.");
+    }
+
+    return data.token;
+  }
+
+  async function checkAdminSession() {
+    try {
+      const response = await fetch(`${AUTH_URL}/status`, {
+        method: "GET",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Session check failed: HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      setIsAdmin(data.isAdmin === true);
+    } catch (err) {
+      console.error("Admin session check failed:", err);
+      setIsAdmin(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchVideos();
+    checkAdminSession();
+  }, []);
+
+  async function handleRequestOtp(event) {
+    event.preventDefault();
+    setAuthLoading(true);
+    setAuthMessage("");
+
+    try {
+      const csrfToken = await getCsrfToken();
+
+      const response = await fetch(`${AUTH_URL}/request-email-otp`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-XSRF-TOKEN": csrfToken,
+        },
+        body: JSON.stringify({
+          email: adminEmail.trim(),
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || `Request failed: HTTP ${response.status}`
+        );
+      }
+
+      setOtpRequested(true);
+      setAuthMessage(
+        data.message || "Check your email for the verification code."
+      );
+    } catch (err) {
+      console.error("OTP request error:", err);
+      setAuthMessage(err.message || "Could not request an OTP.");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function handleVerifyOtp(event) {
+    event.preventDefault();
+    setAuthLoading(true);
+    setAuthMessage("");
+
+    try {
+      const csrfToken = await getCsrfToken();
+
+      const response = await fetch(`${AUTH_URL}/verify-email-otp`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-XSRF-TOKEN": csrfToken,
+        },
+        body: JSON.stringify({
+          email: adminEmail.trim(),
+          otp: otp.trim(),
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.message || `Verification failed: HTTP ${response.status}`
+        );
+      }
+
+      setOtp("");
+      setOtpRequested(false);
+      setAuthMessage("Admin login successful.");
+
+      // Verify the backend session instead of relying only on frontend state.
+      await checkAdminSession();
+      await fetchVideos();
+    } catch (err) {
+      console.error("OTP verification error:", err);
+      setAuthMessage(err.message || "Could not verify the code.");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function handleLogout() {
+    setAuthLoading(true);
+    setAuthMessage("");
+
+    try {
+      const csrfToken = await getCsrfToken();
+
+      const response = await fetch(`${AUTH_URL}/logout`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "X-XSRF-TOKEN": csrfToken,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Logout failed: HTTP ${response.status}`);
+      }
+
+      setIsAdmin(false);
+      setOtp("");
+      setOtpRequested(false);
+      setFormMessage("");
+      setAuthMessage("You have logged out.");
+    } catch (err) {
+      console.error("Logout error:", err);
+      setAuthMessage(err.message || "Could not log out.");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
 
   async function handleAddVideo(event) {
     event.preventDefault();
@@ -213,73 +220,74 @@ useEffect(() => {
     setFormMessage("");
 
     try {
-const response = await fetch(`${API_URL}/demo`, {
-  method: "POST",
-  credentials: "include",
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify(formData),
-});
+      const csrfToken = await getCsrfToken();
 
-
-      if (!response.ok) {
-        throw new Error(`Server returned HTTP ${response.status}`);
-      }
-
-      setFormData({
-        title: "",
-        category: "Sci-Fi",
-        type: "Movie",
-        description: "",
+      const response = await fetch(`${API_URL}/demo`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-XSRF-TOKEN": csrfToken,
+        },
+        body: JSON.stringify(formData),
       });
 
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `HTTP ${response.status}`);
+      }
+
+      setFormData({ ...emptyForm });
       setFormMessage("Video added successfully!");
       await fetchVideos();
     } catch (err) {
       console.error("Add video error:", err);
-      setFormMessage(
-        "Could not add video. Check the backend and API connection."
-      );
+      setFormMessage(`Could not add video: ${err.message}`);
     } finally {
       setSaving(false);
     }
   }
 
-const deleteVideo = async (video) => {
-  const confirmed = window.confirm(
-    `Delete "${video.title}" from your library?`
-  );
-
-  if (!confirmed) return;
-
-  try {
-    const response = await fetch(
-      `https://streamvault-lmsr.onrender.com/api/videos/${encodeURIComponent(video.id)}`,
-      {
-  method: "DELETE",
-  credentials: "include"
-}
+  async function deleteVideo(video) {
+    const confirmed = window.confirm(
+      `Delete "${video.title}" from your library?`
     );
 
-    if (!response.ok) {
-      throw new Error(`Delete failed: ${response.status}`);
+    if (!confirmed) return;
+
+    setFormMessage("");
+
+    try {
+      const csrfToken = await getCsrfToken();
+
+      const response = await fetch(
+        `${API_URL}/${encodeURIComponent(video.id)}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+          headers: {
+            "X-XSRF-TOKEN": csrfToken,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `HTTP ${response.status}`);
+      }
+
+      setFormMessage(`Deleted "${video.title}" successfully.`);
+      await fetchVideos();
+    } catch (err) {
+      console.error("Delete video error:", err);
+      setFormMessage(`Could not delete video: ${err.message}`);
     }
-
-    await fetchVideos();
-  } catch (err) {
-    console.error("Delete video error:", err);
-    alert("Could not delete video. Please try again.");
   }
-};
-
 
   const categories = useMemo(() => {
     return [
       "All",
-      ...new Set(
-        videos.map((video) => video.category).filter(Boolean)
-      ),
+      ...new Set(videos.map((video) => video.category).filter(Boolean)),
     ];
   }, [videos]);
 
@@ -329,97 +337,96 @@ const deleteVideo = async (video) => {
       </header>
 
       <main id="home">
-       
-<section className="library-section" id="admin-access">
-  <div className="section-heading">
-    <div>
-      <span className="eyebrow">OWNER ACCESS</span>
-      <h2>{isAdmin ? "Admin access enabled" : "Admin login"}</h2>
-      <p className="section-description">
-        {isAdmin
-          ? "You are signed in and can manage your vault."
-          : "Sign in with your authorized email to manage your collection."}
-      </p>
-    </div>
-  </div>
+        <section className="library-section" id="admin-access">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">OWNER ACCESS</span>
+              <h2>{isAdmin ? "Admin access enabled" : "Admin login"}</h2>
+              <p className="section-description">
+                {isAdmin
+                  ? "You are signed in and can manage your vault."
+                  : "Sign in with your authorized email to manage your collection."}
+              </p>
+            </div>
+          </div>
 
-  {!isAdmin ? (
-    <form
-      className="add-video-form"
-      onSubmit={otpRequested ? handleVerifyOtp : handleRequestOtp}
-    >
-      <label>
-        Admin email
-        <input
-          type="email"
-          value={adminEmail}
-          onChange={(event) => setAdminEmail(event.target.value)}
-          placeholder="Enter your authorized email"
-          autoComplete="email"
-          required
-          disabled={otpRequested || authLoading}
-        />
-      </label>
+          {!isAdmin ? (
+            <form
+              className="add-video-form"
+              onSubmit={otpRequested ? handleVerifyOtp : handleRequestOtp}
+            >
+              <label>
+                Admin email
+                <input
+                  type="email"
+                  value={adminEmail}
+                  onChange={(event) => setAdminEmail(event.target.value)}
+                  placeholder="Enter your authorized email"
+                  autoComplete="email"
+                  required
+                  disabled={otpRequested || authLoading}
+                />
+              </label>
 
-      {otpRequested && (
-        <label>
-          Six-digit email code
-          <input
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            value={otp}
-            onChange={(event) =>
-              setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
-            }
-            placeholder="Enter the code"
-            pattern="[0-9]{6}"
-            maxLength={6}
-            required
-            disabled={authLoading}
-          />
-        </label>
-      )}
+              {otpRequested && (
+                <label>
+                  Six-digit email code
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={otp}
+                    onChange={(event) =>
+                      setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
+                    }
+                    placeholder="Enter the code"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    required
+                    disabled={authLoading}
+                  />
+                </label>
+              )}
 
-      <button type="submit" disabled={authLoading}>
-        {authLoading
-          ? "Please wait..."
-          : otpRequested
-            ? "Verify code"
-            : "Send email code"}
-      </button>
+              <button type="submit" disabled={authLoading}>
+                {authLoading
+                  ? "Please wait..."
+                  : otpRequested
+                    ? "Verify code"
+                    : "Send email code"}
+              </button>
 
-      {otpRequested && (
-        <button
-          type="button"
-          className="secondary-button"
-          disabled={authLoading}
-          onClick={() => {
-            setOtpRequested(false);
-            setOtp("");
-            setAuthMessage("");
-          }}
-        >
-          Change email
-        </button>
-      )}
+              {otpRequested && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={authLoading}
+                  onClick={() => {
+                    setOtpRequested(false);
+                    setOtp("");
+                    setAuthMessage("");
+                  }}
+                >
+                  Change email
+                </button>
+              )}
 
-      {authMessage && <p role="status">{authMessage}</p>}
-    </form>
-  ) : (
-    <div className="add-video-form">
-      <p>Signed in as {adminEmail}</p>
-      <button
-        type="button"
-        disabled={authLoading}
-        onClick={handleLogout}
-      >
-        {authLoading ? "Please wait..." : "Log out"}
-      </button>
-      {authMessage && <p role="status">{authMessage}</p>}
-    </div>
-  )}
-</section>
+              {authMessage && <p role="status">{authMessage}</p>}
+            </form>
+          ) : (
+            <div className="add-video-form">
+              <p>Admin session verified.</p>
+              <button
+                type="button"
+                disabled={authLoading}
+                onClick={handleLogout}
+              >
+                {authLoading ? "Please wait..." : "Log out"}
+              </button>
+              {authMessage && <p role="status">{authMessage}</p>}
+            </div>
+          )}
+        </section>
 
         <section className="hero">
           <div className="hero-content">
@@ -487,80 +494,80 @@ const deleteVideo = async (video) => {
           </div>
 
           {isAdmin && (
-  <form className="add-video-form" onSubmit={handleAddVideo}>
-            <h3>Add a video to your vault</h3>
+            <form className="add-video-form" onSubmit={handleAddVideo}>
+              <h3>Add a video to your vault</h3>
 
-            <label>
-              Title
-              <input
-                type="text"
-                value={formData.title}
-                onChange={(event) =>
-                  setFormData({
-                    ...formData,
-                    title: event.target.value,
-                  })
-                }
-                placeholder="e.g. Dune: Part Two"
-                required
-              />
-            </label>
+              <label>
+                Title
+                <input
+                  type="text"
+                  value={formData.title}
+                  onChange={(event) =>
+                    setFormData({
+                      ...formData,
+                      title: event.target.value,
+                    })
+                  }
+                  placeholder="e.g. Dune: Part Two"
+                  required
+                />
+              </label>
 
-            <label>
-              Category
-              <input
-                type="text"
-                value={formData.category}
-                onChange={(event) =>
-                  setFormData({
-                    ...formData,
-                    category: event.target.value,
-                  })
-                }
-                placeholder="e.g. Sci-Fi, Drama, Comedy"
-                required
-              />
-            </label>
+              <label>
+                Category
+                <input
+                  type="text"
+                  value={formData.category}
+                  onChange={(event) =>
+                    setFormData({
+                      ...formData,
+                      category: event.target.value,
+                    })
+                  }
+                  placeholder="e.g. Sci-Fi, Drama, Comedy"
+                  required
+                />
+              </label>
 
-            <label>
-              Type
-              <select
-                value={formData.type}
-                onChange={(event) =>
-                  setFormData({
-                    ...formData,
-                    type: event.target.value,
-                  })
-                }
-              >
-                <option value="Movie">Movie</option>
-                <option value="Series">Series</option>
-              </select>
-            </label>
+              <label>
+                Type
+                <select
+                  value={formData.type}
+                  onChange={(event) =>
+                    setFormData({
+                      ...formData,
+                      type: event.target.value,
+                    })
+                  }
+                >
+                  <option value="Movie">Movie</option>
+                  <option value="Series">Series</option>
+                </select>
+              </label>
 
-            <label>
-              Description
-              <textarea
-                value={formData.description}
-                onChange={(event) =>
-                  setFormData({
-                    ...formData,
-                    description: event.target.value,
-                  })
-                }
-                placeholder="Write a short description"
-                rows={3}
-                required
-              />
-            </label>
+              <label>
+                Description
+                <textarea
+                  value={formData.description}
+                  onChange={(event) =>
+                    setFormData({
+                      ...formData,
+                      description: event.target.value,
+                    })
+                  }
+                  placeholder="Write a short description"
+                  rows={3}
+                  required
+                />
+              </label>
 
-            <button type="submit" disabled={saving}>
-              {saving ? "Saving..." : "Add Video"}
-            </button>
+              <button type="submit" disabled={saving}>
+                {saving ? "Saving..." : "Add Video"}
+              </button>
 
-           {formMessage && <p role="status">{formMessage}</p>}
-  </form>
-)}
+              {formMessage && <p role="status">{formMessage}</p>}
+            </form>
+          )}
 
           <div className="toolbar">
             <label className="search-box">
@@ -645,15 +652,16 @@ const deleteVideo = async (video) => {
             <div className="video-grid">
               {filteredVideos.map((video) => (
                 <article className="video-card" key={video.id}>
-                 {isAdmin && (
-  <button
-    type="button"
-    className="secondary-button"
-    onClick={() => deleteVideo(video)}
-  >
-    Delete
-  </button>
-)}
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => deleteVideo(video)}
+                    >
+                      Delete
+                    </button>
+                  )}
+
                   <div className="video-art">
                     <div className="video-art-decoration"></div>
                     <span className="video-type">

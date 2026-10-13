@@ -1,3 +1,4 @@
+
 package com.example.demo;
 
 import java.util.List;
@@ -10,10 +11,10 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 
 @Configuration
 public class SecurityConfig {
@@ -32,27 +33,39 @@ public class SecurityConfig {
         );
 
         http
-             .csrf(csrf -> csrf
-    .csrfTokenRepository(csrfTokenRepository)
-    .csrfTokenRequestHandler(
-        new CsrfTokenRequestAttributeHandler()
-    )
-)
-            .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+            .cors(Customizer.withDefaults())
+
+            .csrf(csrf -> csrf
+                .csrfTokenRepository(csrfTokenRepository)
+                .csrfTokenRequestHandler(
+                    new CsrfTokenRequestAttributeHandler()
+                )
             )
+
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(
+                    SessionCreationPolicy.IF_REQUIRED
+                )
+            )
+
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
                     HttpMethod.GET, "/api/auth/csrf"
                 ).permitAll()
+
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/user-auth/**").permitAll()
+
                 .requestMatchers(
-                    HttpMethod.GET, "/api/videos", "/api/videos/**"
+                    HttpMethod.GET,
+                    "/api/videos",
+                    "/api/videos/**"
                 ).permitAll()
+
                 .requestMatchers(
                     HttpMethod.OPTIONS, "/**"
                 ).permitAll()
+
                 .anyRequest().authenticated()
             );
 
@@ -61,6 +74,7 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
+
         CorsConfiguration config = new CorsConfiguration();
 
         config.setAllowedOrigins(List.of(
@@ -70,7 +84,12 @@ public class SecurityConfig {
         ));
 
         config.setAllowedMethods(List.of(
-            "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE",
+            "OPTIONS"
         ));
 
         config.setAllowedHeaders(List.of(
@@ -80,6 +99,7 @@ public class SecurityConfig {
         ));
 
         config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source =
                 new UrlBasedCorsConfigurationSource();

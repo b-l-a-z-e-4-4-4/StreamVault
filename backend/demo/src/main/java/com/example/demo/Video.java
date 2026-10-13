@@ -18,6 +18,7 @@ public class Video {
     // Video storage and playback
     private String videoUrl;
     private String publicId;
+    private String thumbnailUrl;
     private boolean published = true;
 
     // Optional quality-specific video URLs
@@ -62,6 +63,11 @@ public class Video {
     public String getPublicId() { return publicId; }
     public void setPublicId(String publicId) {
         this.publicId = publicId;
+    }
+
+    public String getThumbnailUrl() { return thumbnailUrl; }
+    public void setThumbnailUrl(String thumbnailUrl) {
+        this.thumbnailUrl = thumbnailUrl;
     }
 
     public boolean isPublished() { return published; }

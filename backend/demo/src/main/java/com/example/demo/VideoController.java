@@ -87,11 +87,22 @@ public class VideoController {
                     .body(Map.of("error", "Cloudinary public ID is required."));
         }
 
+        // Validate thumbnail URL when provided.
+        if (video.getThumbnailUrl() != null
+                && !video.getThumbnailUrl().isBlank()
+                && !video.getThumbnailUrl().startsWith(
+                    "https://res.cloudinary.com/")) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Invalid Cloudinary thumbnail URL."));
+        }
+
         video.setId(null);
         video.setTitle(video.getTitle().trim());
         video.setPublished(true);
 
+        // Saves videoUrl, thumbnailUrl, and other metadata to MongoDB.
         Video savedVideo = videoRepository.save(video);
+
         return ResponseEntity.ok(savedVideo);
     }
 
@@ -110,6 +121,7 @@ public class VideoController {
         }
 
         videoRepository.deleteById(id);
+
         return ResponseEntity.noContent().build();
     }
 }

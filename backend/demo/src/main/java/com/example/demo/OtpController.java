@@ -1,6 +1,9 @@
+
 package com.example.demo;
 
 import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletRequest;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -10,7 +13,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.*;
-import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.List;
 import java.util.Map;
@@ -31,6 +33,7 @@ public class OtpController {
             OtpService otpService,
             EmailOtpService emailOtpService,
             @Value("${app.admin.email}") String adminEmail) {
+
         this.otpService = otpService;
         this.emailOtpService = emailOtpService;
         this.adminEmail = adminEmail.trim();
@@ -39,6 +42,7 @@ public class OtpController {
     @GetMapping("/csrf")
     public ResponseEntity<Map<String, String>> csrf(
             CsrfToken csrfToken) {
+
         return ResponseEntity.ok(
                 Map.of("token", csrfToken.getToken())
         );
@@ -52,6 +56,7 @@ public class OtpController {
 
         if (email == null
                 || !EMAIL_PATTERN.matcher(email.trim()).matches()) {
+
             return ResponseEntity.badRequest().body(
                     Map.of("message", "Enter a valid email address.")
             );
@@ -70,7 +75,9 @@ public class OtpController {
         try {
             emailOtpService.sendOtp(email, otp);
         } catch (Exception exception) {
+
             otpService.invalidateOtp(email);
+
             System.err.println(
                     "OTP EMAIL ERROR: " + exception.getMessage()
             );
@@ -91,17 +98,20 @@ public class OtpController {
         );
     }
 
+    @PostMapping("/verify-email-otp")
     public ResponseEntity<Map<String, String>> verifyEmailOtp(
-        @RequestBody Map<String, String> request,
-        HttpSession session,
-        HttpServletRequest servletRequest) {
+            @RequestBody Map<String, String> request,
+            HttpSession session,
+            HttpServletRequest servletRequest) {
 
         String email = request.get("email");
         String code = request.get("otp");
 
-        if (email == null || code == null
+        if (email == null
+                || code == null
                 || !EMAIL_PATTERN.matcher(email.trim()).matches()
                 || !code.matches("\\d{6}")) {
+
             return ResponseEntity.badRequest().body(
                     Map.of(
                             "message",
@@ -151,6 +161,7 @@ public class OtpController {
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
 
+        // Persist authentication in the HTTP session.
         session.setAttribute(
                 HttpSessionSecurityContextRepository
                         .SPRING_SECURITY_CONTEXT_KEY,
@@ -159,7 +170,8 @@ public class OtpController {
 
         session.setAttribute("STREAMVAULT_ADMIN", true);
         session.setAttribute(
-                "STREAMVAULT_ADMIN_EMAIL", adminEmail
+                "STREAMVAULT_ADMIN_EMAIL",
+                adminEmail
         );
 
         return ResponseEntity.ok(
@@ -170,6 +182,7 @@ public class OtpController {
     @PostMapping("/logout")
     public ResponseEntity<Map<String, String>> logout(
             HttpSession session) {
+
         session.invalidate();
         SecurityContextHolder.clearContext();
 
@@ -181,6 +194,7 @@ public class OtpController {
     @GetMapping("/status")
     public ResponseEntity<Map<String, Object>> status(
             HttpSession session) {
+
         boolean isAdmin = Boolean.TRUE.equals(
                 session.getAttribute("STREAMVAULT_ADMIN")
         );

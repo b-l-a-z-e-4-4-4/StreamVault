@@ -1,8 +1,10 @@
 package com.example.demo;
 
 import org.mongodb.spring.session.config.annotation.web.http.EnableMongoHttpSession;
+import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.mongodb.core.MongoOperations;
 import org.springframework.session.web.http.CookieSerializer;
 import org.springframework.session.web.http.DefaultCookieSerializer;
 
@@ -29,4 +31,15 @@ public class SessionConfig {
 
         return serializer;
     }
+
+    // Temporary diagnostic: reports the configured database name.
+    @Bean
+public CommandLineRunner checkMongoConnection(
+        MongoOperations mongoOperations) {
+    return args -> {
+        System.out.println(
+                "MongoOperations implementation: "
+                        + mongoOperations.getClass().getName());
+    };
+}
 }

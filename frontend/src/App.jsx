@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import "./App.css";
+const BACKEND_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://streamvault-lmsr.onrender.com";
 
-const API_URL = "https://streamvault-lmsr.onrender.com/api/videos";
-const AUTH_URL = "https://streamvault-lmsr.onrender.com/api/auth";
-const USER_AUTH_URL = "https://streamvault-lmsr.onrender.com/api/user-auth";
-const PROGRESS_URL = "https://streamvault-lmsr.onrender.com/api/progress";
+const API_URL = `${BACKEND_URL}/api/videos`;
+const AUTH_URL = `${BACKEND_URL}/api/auth`;
+const USER_AUTH_URL = `${BACKEND_URL}/api/user-auth`;
+const PROGRESS_URL = `${BACKEND_URL}/api/progress`;
 const CLOUDINARY_SIGNATURE_URL =
-  "https://streamvault-lmsr.onrender.com/api/cloudinary/signature";
+  `${BACKEND_URL}/api/cloudinary/signature`;
 
 const emptyForm = {
   title: "",

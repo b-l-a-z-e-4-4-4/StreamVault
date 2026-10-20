@@ -1,23 +1,35 @@
 
 package com.example.demo;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.MailException;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 @Service
 public class EmailOtpService {
 
-    private final JavaMailSender mailSender;
+    private final String apiKey;
     private final String fromEmail;
+    private final HttpClient httpClient;
+    private final ObjectMapper objectMapper;
 
     public EmailOtpService(
-            JavaMailSender mailSender,
-            @Value("${app.otp.email.from}") String fromEmail) {
-        this.mailSender = mailSender;
+            @Value("${RESEND_API_KEY:}") String apiKey,
+            @Value("${app.otp.email.from:onboarding@resend.dev}")
+            String fromEmail) {
+
+        this.apiKey = apiKey;
         this.fromEmail = fromEmail;
+        this.httpClient = HttpClient.newHttpClient();
+        this.objectMapper = new ObjectMapper();
     }
 
     public void sendOtp(String toEmail, String otp) {
@@ -28,20 +40,49 @@ public class EmailOtpService {
                     "Recipient email and OTP are required");
         }
 
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(fromEmail);
-        message.setTo(toEmail);
-        message.setSubject("Your StreamVault OTP");
-        message.setText(
-                "Your StreamVault OTP is " + otp
-                + ". Do not share this code with anyone."
-        );
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new IllegalStateException(
+                    "RESEND_API_KEY is not configured");
+        }
 
         try {
-            mailSender.send(message);
-        } catch (MailException e) {
+            Map<String, Object> payload = Map.of(
+                    "from", "StreamVault <" + fromEmail + ">",
+                    "to", new String[]{toEmail},
+                    "subject", "Your StreamVault OTP",
+                    "text", "Your StreamVault OTP is " + otp
+                            + ". Do not share this code with anyone."
+            );
+
+            String json = objectMapper.writeValueAsString(payload);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.resend.com/emails"))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(
+                            json, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() < 200
+                    || response.statusCode() >= 300) {
+                throw new IllegalStateException(
+                        "Resend email API returned HTTP "
+                                + response.statusCode()
+                                + ": " + response.body());
+            }
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             throw new IllegalStateException(
-                    "Gmail SMTP failed to send the OTP email", e);
+                    "Resend email request was interrupted", e);
+        } catch (IOException e) {
+            throw new IllegalStateException(
+                    "Could not communicate with Resend email API", e);
         }
     }
 }
